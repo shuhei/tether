@@ -9,8 +9,6 @@
 
       clientSocket.onopen = function () {
         console.log('Client socket opened.');
-        clientSocket.send('Hey!Hey!Hey!Hey!Hey!Hey!Hey!Hey!Hey!Hey!Hey!Hey!Hey!Hey!Hey!Hey!Hey!Hey!Hey!Hey!Hey!Hey!Hey!Hey!Hey!Hey!Hey!Hey!Hey!Hey!Hey!Hey!Hey!Hey!Hey!Hey!Hey!Hey!Hey!Hey!Hey!Hey!Hey!Hey!Hey!Hey!Hey!Hey!Hey!Hey!Hey!Hey!Hey!Hey!Hey!Hey!Hey!Hey!Hey!Hey!Hey!Hey!Hey!Hey!Hey!Hey!Hey!Hey!Hey!Hey!Hey!Hey!Hey!Hey!Hey!Hey!Hey!Hey!Hey!Hey!Hey!Hey!Hey!Hey!Hey!Hey!Hey!Hey!Hey!Hey!Hey!Hey!Hey!Hey!Hey!Hey!Hey!Hey!Hey!Hey!Hey!Hey!Hey!Hey!Hey!Hey!Hey!Hey!');
-        // clientSocket.send('hey!');
         clientSocket.onmessage = function (message) {
           console.log('Client socket message:', message.data);
           if (proxySocket && proxySocket.readyState === WebSocket.OPEN) {

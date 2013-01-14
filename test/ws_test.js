@@ -63,7 +63,7 @@ describe('WebSocket', function () {
       ws = new WebSocket(mockSocket);
     });
 
-    it('sends payload shorter than 126', function () {
+    it('sends ASCII string payload shorter than 126', function () {
       ws.send('Hello, World!');
 
       var actual = mockSocket.write.getCall(0).args[0];
@@ -72,7 +72,7 @@ describe('WebSocket', function () {
       actual.toString('utf-8', 2).should.equal('Hello, World!');
     });
 
-    it('sends UTF-8 payload', function () {
+    it('sends UTF-8 string payload', function () {
       ws.send('こんにちは、世界！');
 
       var actual = mockSocket.write.getCall(0).args[0];
@@ -81,7 +81,7 @@ describe('WebSocket', function () {
       actual.toString('utf-8', 2).should.equal('こんにちは、世界！');
     });
 
-    it('sends payload longer than 125 and shorter than 2^16', function () {
+    it('sends ASCII string payload longer than 125 and shorter than 2^16', function () {
       var message = repeatString('abcdefghijklmnopqrstuvwxyz', 5);
       ws.send(message);
 
@@ -93,9 +93,18 @@ describe('WebSocket', function () {
       actual.toString('utf-8', 2 + 2).should.equal(message);
     });
 
-    it('throws error for payload longer than or equal to 2^16', function () {
+    it('throws error for ASCII string payload longer than 2^16', function () {
       var message = repeatString('abcdefghijklmnopqrstuvwxyz', 2521);
       ws.send.bind(ws, message).should.throw();
+    });
+
+    it('sends buffer payload', function () {
+      ws.send(new Buffer('Hello, World!'));
+
+      var actual = mockSocket.write.getCall(0).args[0];
+      actual[0].should.equal(0x82);
+      actual[1].should.equal(13);
+      actual.toString('utf-8', 2).should.equal('Hello, World!');
     });
   });
 
