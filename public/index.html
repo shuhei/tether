@@ -1,0 +1,42 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <title>Hello, World!</title>
+    <script>
+      var clientSocket = new WebSocket('ws://localhost:8080', ['test']);
+      var proxySocket = new WebSocket('ws://localhost:8090', ['proxy']);
+
+      clientSocket.onopen = function () {
+        console.log('Client socket opened.');
+        clientSocket.send('Hey!Hey!Hey!Hey!Hey!Hey!Hey!Hey!Hey!Hey!Hey!Hey!Hey!Hey!Hey!Hey!Hey!Hey!Hey!Hey!Hey!Hey!Hey!Hey!Hey!Hey!Hey!Hey!Hey!Hey!Hey!Hey!Hey!Hey!Hey!Hey!Hey!Hey!Hey!Hey!Hey!Hey!Hey!Hey!Hey!Hey!Hey!Hey!Hey!Hey!Hey!Hey!Hey!Hey!Hey!Hey!Hey!Hey!Hey!Hey!Hey!Hey!Hey!Hey!Hey!Hey!Hey!Hey!Hey!Hey!Hey!Hey!Hey!Hey!Hey!Hey!Hey!Hey!Hey!Hey!Hey!Hey!Hey!Hey!Hey!Hey!Hey!Hey!Hey!Hey!Hey!Hey!Hey!Hey!Hey!Hey!Hey!Hey!Hey!Hey!Hey!Hey!Hey!Hey!Hey!Hey!Hey!Hey!');
+        // clientSocket.send('hey!');
+        clientSocket.onmessage = function (message) {
+          console.log('Client socket message:', message.data);
+          if (proxySocket && proxySocket.readyState === WebSocket.OPEN) {
+            // proxySocket.send(message.data);
+          }
+        };
+      };
+      clientSocket.onerror = function (e) {
+        console.log('Client socket error:', e);
+      };
+
+      proxySocket.onopen = function () {
+        console.log('Proxy socket opened.');
+        proxySocket.onmessage = function (message) {
+          console.log('Client socket message:', message.data);
+          if (clientSocket && clientSocket.readyState === WebSocket.OPEN) {
+            // clientSocket.send(message.data);
+          }
+        };
+      };
+      proxySocket.onerror = function (e) {
+        console.log('Proxy socket error:', e);
+      }
+    </script>
+  </head>
+  <body>
+    <h1>Hello, World!</h1>
+  </body>
+</html>

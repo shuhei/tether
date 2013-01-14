@@ -1,0 +1,18 @@
+{
+  "name": "tether",
+  "version": "0.0.0",
+  "description": "ERROR: No README.md file found!",
+  "main": "index.js",
+  "scripts": {
+    "test": "mocha -R spec"
+  },
+  "repository": "",
+  "author": "Shuhei Kagawa",
+  "license": "BSD",
+  "devDependencies": {
+    "mocha": "~1.8.1",
+    "chai": "~1.4.2",
+    "sinon": "~1.5.2",
+    "sinon-chai": "~2.3.1"
+  }
+}
