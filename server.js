@@ -16,7 +16,7 @@ httpServer.on('upgrade', function (req, socket, head) {
     var dstSocket = destinationSockets[srcPort];
 
     if (!dstSocket) {
-      var lines = message.toString().split('\r\n');
+      var lines = message.toString('utf-8', 2).split('\r\n'); // Ignore the 2 bytes at the head.
       var isSecure = lines[0].indexOf('CONNECT ') === 0;
       var host, port;
       lines.forEach(function (line) {
@@ -31,13 +31,15 @@ httpServer.on('upgrade', function (req, socket, head) {
       dstSocket.on('connect', function () {
         color.green('Connected to', host, ':', port);
         if (isSecure) {
-          // TODO Should this be done on client.js?
-          ws.send('HTTP/1.0 200 OK\r\nConnection: close\r\n\r\n');
+          // ws.send('HTTP/1.0 200 OK\r\nConnection: close\r\n\r\n');
+          var connectResponse = new Buffer('HTTP/1.0 200 OK\r\nConnection established\r\n\r\n');
+          ws.send(Buffer.concat([srcPortBuffer, connectResponse]));
         } else {
           dstSocket.write(messageWithoutPort, 'binary');
         }
       });
       dstSocket.on('data', function (chunk) {
+        // console.log(chunk.toString());
         var chunkWithPort = Buffer.concat([srcPortBuffer, chunk]);
         ws.send(chunkWithPort);
       });
