@@ -18,13 +18,16 @@ httpServer.on('request', function (req, res) {
 });
 httpServer.on('upgrade', function (req, socket, head) {
   var ws = WebSocket.upgrade(req, socket, 'test');
-  ws.on('data', function (message) {
-    ws.send('Hey, I got your message.Hey, I got your message.Hey, I got your message.Hey, I got your message.Hey, I got your message.Hey, I got your message.Hey, I got your message.Hey, I got your message.Hey, I got your message.Hey, I got your message.Hey, I got your message.Hey, I got your message. Hey, I got your message.');
-
-    // TODO Forward the data to the proxy server.
+  ws.on('data', function (data) {
+    var port = data.readUInt16BE(0);
+    var dataWithoutPort = data.slice(2);
+    var proxySocket = proxySockets[port];
+    color.green('Sending response data:', dataWithoutPort.length);
+    proxySocket && proxySocket.write(dataWithoutPort, 'binary');
   });
 
   httpServer.ws = ws;
+  color.green('Upgraded');
 });
 httpServer.on('listening', function () {
   color.green('HTTP & WebSocket server listening on 8080.');
@@ -33,23 +36,32 @@ httpServer.listen(8080);
 
 // HTTP Proxy server on local
 var proxyServer = net.createServer();
-proxyServer.on('connection', function(connection) {
-  if (!connection) {
-    return;
-  }
-  color.magenta('Connection opened with', connection.remoteAddress, connection.remotePort);
+var proxySockets = {};
+proxyServer.on('connection', function(socket) {
+  color.magenta('Socket opened with', socket.remoteAddress, socket.remotePort);
+  var port = socket.remotePort;
+  proxySockets[port] = socket;
+  var portBuffer = new Buffer(2);
+  portBuffer.writeUInt16BE(port, 0);
 
-  connection.on('data', function (chunk) {
+  socket.on('data', function (data) {
+    color.magenta('Received request data');
+    color.magenta(data.toString());
     if (httpServer.ws) {
-      httpServer.ws.write(chunk, 'binary');
+      // Send data with port number.
+      var dataWithPort = Buffer.concat([portBuffer, data]);
+      httpServer.ws.send(dataWithPort);
     }
   });
-  connection.on('end', function () {
-    color.magenta('Connection closed.');
+  socket.on('close', function () {
+    color.magenta('Socket closed.');
   });
-  connection.on('error', function (e) {
-    color.magenta('[error on connection to ' + host + ']', e.message);
-    connection && connection.end();
+  socket.on('end', function () {
+    color.magenta('Socket ended.');
+    proxySockets[port] = null;
+  });
+  socket.on('error', function (e) {
+    color.magenta('Error:', e.message);
   });
 });
 proxyServer.on('listening', function () {

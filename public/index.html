@@ -2,39 +2,45 @@
 <html>
   <head>
     <meta charset="utf-8">
-    <title>Hello, World!</title>
+    <title>Tethering Bridge</title>
     <script>
       var clientSocket = new WebSocket('ws://localhost:8080', ['test']);
       var proxySocket = new WebSocket('ws://localhost:8090', ['proxy']);
 
       clientSocket.onopen = function () {
         console.log('Client socket opened.');
-        clientSocket.onmessage = function (message) {
-          console.log('Client socket message:', message.data);
-          if (proxySocket && proxySocket.readyState === WebSocket.OPEN) {
-            // proxySocket.send(message.data);
-          }
-        };
+      };
+      clientSocket.onmessage = function (message) {
+        console.log('Client socket message:', message.data);
+        if (proxySocket && proxySocket.readyState === WebSocket.OPEN) {
+          proxySocket.send(message.data);
+        }
       };
       clientSocket.onerror = function (e) {
         console.log('Client socket error:', e);
       };
+      clientSocket.onclose = function (close) {
+        console.log('Client socket closed:', close.code, close.reason);
+      };
 
       proxySocket.onopen = function () {
         console.log('Proxy socket opened.');
-        proxySocket.onmessage = function (message) {
-          console.log('Client socket message:', message.data);
-          if (clientSocket && clientSocket.readyState === WebSocket.OPEN) {
-            // clientSocket.send(message.data);
-          }
-        };
+      };
+      proxySocket.onmessage = function (message) {
+        console.log('Proxy socket message:', message.data);
+        if (clientSocket && clientSocket.readyState === WebSocket.OPEN) {
+          clientSocket.send(message.data);
+        }
       };
       proxySocket.onerror = function (e) {
         console.log('Proxy socket error:', e);
-      }
+      };
+      proxySocket.onclose = function (close) {
+        console.log('Proxy socket closed:', close.code, close.reason);
+      };
     </script>
   </head>
   <body>
-    <h1>Hello, World!</h1>
+    <h1>-</h1>
   </body>
 </html>
