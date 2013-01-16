@@ -31,8 +31,8 @@
         log.appendChild(p);
       }
 
-      var clientSocket = new WebSocket('ws://localhost:8080', ['test']);
-      var proxySocket = new WebSocket('ws://localhost:8090', ['proxy']);
+      var clientSocket = new WebSocket('ws://#{CLIENT_HOST}:#{CLIENT_PORT}', ['proxy']);
+      var proxySocket = new WebSocket('ws://#{SERVER_HOST}:#{SERVER_PORT}', ['proxy']);
 
       clientSocket.onopen = function () {
         output('Client socket opened.');

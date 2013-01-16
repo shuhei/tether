@@ -5,6 +5,14 @@ var fs = require('fs');
 var WebSocket = require('./lib/ws');
 var color = require('./lib/color');
 
+var config = {
+  CLIENT_HOST: process.env.LOCAL_HOST || 'localhost',
+  CLIENT_PORT: parseInt(process.env.LOCAL_PORT || 8080),
+  SERVER_HOST: process.env.SERVER_HOST || 'localhost',
+  SERVER_PORT: parseInt(process.env.SERVER_PORT || 8090),
+  PROXY_PORT: parseInt(process.env.PROXY_PORT || 8124)
+};
+
 var httpServer = http.createServer();
 httpServer.on('request', function (req, res) {
   fs.readFile('public/index.html', 'utf-8', function (err, data) {
@@ -13,11 +21,18 @@ httpServer.on('request', function (req, res) {
       return;
     }
     res.writeHead(200, { 'Content-Type': 'text/html' });
-    res.end(data);
+    var replaced = data;
+    for (var k in config) {
+      var before = new RegExp('#\{' + k + '\}', 'g');
+      var after = config[k];
+      replaced = replaced.replace(before, after);
+    }
+    console.log(replaced);
+    res.end(replaced);
   });
 });
 httpServer.on('upgrade', function (req, socket, head) {
-  var ws = WebSocket.upgrade(req, socket, 'test');
+  var ws = WebSocket.upgrade(req, socket, 'proxy');
   ws.on('data', function (data) {
     var port = data.readUInt16BE(0);
     var dataWithoutPort = data.slice(2);
@@ -30,9 +45,9 @@ httpServer.on('upgrade', function (req, socket, head) {
   color.green('Upgraded');
 });
 httpServer.on('listening', function () {
-  color.green('HTTP & WebSocket server listening on 8080.');
+  color.green('HTTP & WebSocket server listening on', config.CLIENT_PORT);
 });
-httpServer.listen(8080);
+httpServer.listen(config.CLIENT_PORT);
 
 // HTTP Proxy server on local
 var proxyServer = net.createServer();
@@ -64,7 +79,7 @@ proxyServer.on('connection', function(socket) {
   });
 });
 proxyServer.on('listening', function () {
-  color.magenta('HTTP proxy server listening on 8124.');
+  color.magenta('HTTP proxy server listening on', config.PROXY_PORT);
 });
-proxyServer.listen(8124);
+proxyServer.listen(config.PROXY_PORT);
 

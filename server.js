@@ -4,6 +4,10 @@ var http = require('http');
 var WebSocket = require('./lib/ws');
 var color = require('./lib/color');
 
+var config = {
+  SERVER_PORT: parseInt(process.env.SERVER_PORT || 8090)
+};
+
 var httpServer = http.createServer();
 var destinationSockets = {};
 httpServer.on('upgrade', function (req, socket, head) {
@@ -63,6 +67,6 @@ httpServer.on('upgrade', function (req, socket, head) {
   httpServer.ws = ws;
 });
 httpServer.on('listening', function () {
-  color.green('WS -> HTTP server listening on 8090.');
+  color.green('WS -> HTTP server listening on', config.SERVER_PORT);
 });
-httpServer.listen(8090);
+httpServer.listen(config.SERVER_PORT);
