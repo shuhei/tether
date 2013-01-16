@@ -45,8 +45,7 @@ proxyServer.on('connection', function(socket) {
   portBuffer.writeUInt16BE(port, 0);
 
   socket.on('data', function (data) {
-    color.magenta('Received request data');
-    color.magenta(data.toString());
+    color.magenta('Received request data:', data.length);
     if (httpServer.ws) {
       // Send data with port number.
       var dataWithPort = Buffer.concat([portBuffer, data]);

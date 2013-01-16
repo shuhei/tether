@@ -3,44 +3,68 @@
   <head>
     <meta charset="utf-8">
     <title>Tethering Bridge</title>
+    <style type="text/css">
+      body {
+        background-color: #100;
+      }
+      #log p {
+        color: #fff;
+        margin: 0.2em 0;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="log"></div>
     <script>
+      var DEBUG = false;
+      function debug() {
+        if (DEBUG) {
+          console.log.apply(console, arguments);
+        }
+      }
+      
+      var log = document.getElementById('log');
+      function output() {
+        debug.apply(null, arguments);
+        var p = document.createElement('p');
+        p.innerText = Array.prototype.join.call(arguments, '');
+        log.appendChild(p);
+      }
+
       var clientSocket = new WebSocket('ws://localhost:8080', ['test']);
       var proxySocket = new WebSocket('ws://localhost:8090', ['proxy']);
 
       clientSocket.onopen = function () {
-        console.log('Client socket opened.');
+        output('Client socket opened.');
       };
       clientSocket.onmessage = function (message) {
-        console.log('Client socket message:', message.data);
+        debug('Client socket message:', message.data);
         if (proxySocket && proxySocket.readyState === WebSocket.OPEN) {
           proxySocket.send(message.data);
         }
       };
       clientSocket.onerror = function (e) {
-        console.log('Client socket error:', e);
+        output('Client socket error:', e);
       };
       clientSocket.onclose = function (close) {
-        console.log('Client socket closed:', close.code, close.reason);
+        output('Client socket closed:', close.code, close.reason);
       };
 
       proxySocket.onopen = function () {
-        console.log('Proxy socket opened.');
+        output('Proxy socket opened.');
       };
       proxySocket.onmessage = function (message) {
-        console.log('Proxy socket message:', message.data);
+        debug('Proxy socket message:', message.data);
         if (clientSocket && clientSocket.readyState === WebSocket.OPEN) {
           clientSocket.send(message.data);
         }
       };
       proxySocket.onerror = function (e) {
-        console.log('Proxy socket error:', e);
+        output('Proxy socket error:', e);
       };
       proxySocket.onclose = function (close) {
-        console.log('Proxy socket closed:', close.code, close.reason);
+        output('Proxy socket closed:', close.code, close.reason);
       };
     </script>
-  </head>
-  <body>
-    <h1>-</h1>
   </body>
 </html>
