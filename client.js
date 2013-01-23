@@ -6,7 +6,6 @@ var WebSocket = require('./lib/ws');
 var color = require('./lib/color');
 
 var config = {
-  CLIENT_HOST: process.env.LOCAL_HOST || 'localhost',
   CLIENT_PORT: parseInt(process.env.LOCAL_PORT || 8080),
   SERVER_HOST: process.env.SERVER_HOST || 'localhost',
   SERVER_PORT: parseInt(process.env.SERVER_PORT || 8090),
