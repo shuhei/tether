@@ -2,7 +2,7 @@ var http = require('http');
 var net = require('net');
 var fs = require('fs');
 
-var WebSocket = require('./lib/ws');
+var VirtualSocket = require('./lib/virtualsocket');
 var color = require('./lib/color');
 
 var config = {
@@ -30,13 +30,12 @@ httpServer.on('request', function (req, res) {
   });
 });
 httpServer.on('upgrade', function (req, socket, head) {
-  var ws = WebSocket.upgrade(req, socket, 'proxy');
-  ws.on('data', function (data) {
-    var port = data.readUInt16BE(0);
-    var dataWithoutPort = data.slice(2);
+  var ws = VirtualSocket.upgrade(req, socket, 'proxy');
+
+  ws.on('dataWithPort', function (port, data) {
     var proxySocket = proxySockets[port];
-    color.green('Sending response data:', dataWithoutPort.length);
-    proxySocket && proxySocket.write(dataWithoutPort, 'binary');
+    color.green('Sending response data:', data.length);
+    proxySocket && proxySocket.write(data, 'binary');
   });
 
   httpServer.ws = ws;
@@ -52,18 +51,14 @@ var proxyServer = net.createServer();
 var proxySockets = {};
 proxyServer.on('connection', function(socket) {
   color.magenta('Socket opened with', socket.remoteAddress, socket.remotePort);
-  console.log('[connect]', socket.remotePort);
+  color.white('[connect]', socket.remotePort);
   var port = socket.remotePort;
   proxySockets[port] = socket;
-  var portBuffer = new Buffer(2);
-  portBuffer.writeUInt16BE(port, 0);
 
   socket.on('data', function (data) {
     color.magenta('Received request data:', data.length);
     if (httpServer.ws) {
-      // Send data with port number.
-      var dataWithPort = Buffer.concat([portBuffer, data]);
-      httpServer.ws.send(dataWithPort);
+      httpServer.ws.sendWithPort(port, data);
     }
   });
   socket.on('close', function () {
@@ -72,7 +67,7 @@ proxyServer.on('connection', function(socket) {
   socket.on('end', function () {
     color.magenta('Socket ended.');
     proxySockets[port] = null;
-    console.log('[end]', port);
+    color.white('[end]', port);
   });
   socket.on('error', function (e) {
     color.magenta('Error:', e.message);

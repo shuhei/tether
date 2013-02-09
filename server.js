@@ -1,7 +1,7 @@
 var net = require('net');
 var http = require('http');
 
-var WebSocket = require('./lib/ws');
+var VirtualSocket = require('./lib/virtualsocket');
 var color = require('./lib/color');
 
 var config = {
@@ -12,16 +12,13 @@ var config = {
 var httpServer = http.createServer();
 var destinationSockets = {};
 httpServer.on('upgrade', function (req, socket, head) {
-  var ws = WebSocket.upgrade(req, socket, 'proxy');
-  ws.on('data', function (message) {
-    var srcPort = message.readUInt16BE(0);
-    var srcPortBuffer = new Buffer(2);
-    srcPortBuffer.writeUInt16BE(srcPort, 0);
-    var messageWithoutPort = message.slice(2);
+  var ws = VirtualSocket.upgrade(req, socket, 'proxy');
+
+  ws.on('dataWithPort', function (srcPort, message) {
     var dstSocket = destinationSockets[srcPort];
 
     if (!dstSocket) {
-      var lines = message.toString('utf-8', 2).split('\r\n'); // Ignore the 2 bytes at the head.
+      var lines = message.toString('utf-8').split('\r\n');
       var isSecure = lines[0].indexOf('CONNECT ') === 0;
       var host, port;
       lines.forEach(function (line) {
@@ -35,13 +32,13 @@ httpServer.on('upgrade', function (req, socket, head) {
       color.green('Request is for', host, ':', port);
       dstSocket = destinationSockets[srcPort] = net.connect(port, host);
       dstSocket.on('connect', function () {
-        console.log('[connect]', srcPort, '->', host, port);
+        color.white('[connect]', srcPort, '->', host, port);
         color.green('Connected to', host, ':', port);
         if (isSecure) {
           var connectResponse = new Buffer('HTTP/1.0 200 OK\r\nConnection established\r\n\r\n');
-          ws.send(Buffer.concat([srcPortBuffer, connectResponse]));
+          ws.sendWithPort(srcPort, connectResponse);
         } else {
-          dstSocket.write(messageWithoutPort, 'binary');
+          dstSocket.write(message, 'binary');
         }
       });
       dstSocket.on('data', function (chunk) {
@@ -50,8 +47,7 @@ httpServer.on('upgrade', function (req, socket, head) {
           var lengthToSend = Math.min(chunk.length - currentIndex, config.DATA_LIMIT);
           var bufferToSend = chunk.slice(currentIndex, currentIndex + lengthToSend);
           currentIndex += lengthToSend;
-          var chunkWithPort = Buffer.concat([srcPortBuffer, bufferToSend]);
-          ws.send(chunkWithPort);
+          ws.sendWithPort(srcPort, bufferToSend);
         }
       });
       dstSocket.on('error', function (e) {
@@ -60,7 +56,7 @@ httpServer.on('upgrade', function (req, socket, head) {
         // TODO Send back response
       });
       dstSocket.on('end', function () {
-        console.log('[end]', srcPort, '->', host, port);
+        color.white('[end]', srcPort, '->', host, port);
         color.green('Ended:', host, ':', port);
         destinationSockets[srcPort] = null;
       });
@@ -68,7 +64,7 @@ httpServer.on('upgrade', function (req, socket, head) {
         color.green('Closed', host, ':', port);
       });
     } else {
-      dstSocket.write(messageWithoutPort, 'binary');
+      dstSocket.write(message, 'binary');
     }
   });
 
