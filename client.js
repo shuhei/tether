@@ -26,7 +26,6 @@ httpServer.on('request', function (req, res) {
       var after = config[k];
       replaced = replaced.replace(before, after);
     }
-    console.log(replaced);
     res.end(replaced);
   });
 });
@@ -53,6 +52,7 @@ var proxyServer = net.createServer();
 var proxySockets = {};
 proxyServer.on('connection', function(socket) {
   color.magenta('Socket opened with', socket.remoteAddress, socket.remotePort);
+  console.log('[connect]', socket.remotePort);
   var port = socket.remotePort;
   proxySockets[port] = socket;
   var portBuffer = new Buffer(2);
@@ -72,6 +72,7 @@ proxyServer.on('connection', function(socket) {
   socket.on('end', function () {
     color.magenta('Socket ended.');
     proxySockets[port] = null;
+    console.log('[end]', port);
   });
   socket.on('error', function (e) {
     color.magenta('Error:', e.message);
