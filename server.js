@@ -53,15 +53,17 @@ httpServer.on('upgrade', function (req, socket, head) {
       dstSocket.on('error', function (e) {
         color.red('Error on', host, ':', port, '|', e.message);
         destinationSockets[srcPort] = null;
-        // TODO Send back response
+        ws.closePort(srcPort);
       });
       dstSocket.on('end', function () {
-        color.white('[end]', srcPort, '->', host, port);
-        color.green('Ended:', host, ':', port);
+        color.green('Received FIN packet:', host, ':', port);
         destinationSockets[srcPort] = null;
+        // Send FIN packet to client ASAP.
+        ws.closePort(srcPort);
       });
-      dstSocket.on('close', function () {
+      dstSocket.on('close', function (hadError) {
         color.green('Closed', host, ':', port);
+        color.white('[close]', srcPort, '->', host, port);
       });
     } else {
       dstSocket.write(message, 'binary');

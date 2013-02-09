@@ -37,6 +37,11 @@ httpServer.on('upgrade', function (req, socket, head) {
     color.green('Sending response data:', data.length);
     proxySocket && proxySocket.write(data, 'binary');
   });
+  ws.on('closePort', function (port) {
+    var proxySocket = proxySockets[port];
+    color.green('Ending socket:', port);
+    proxySocket && proxySocket.end();
+  });
 
   httpServer.ws = ws;
   color.green('Upgraded');
@@ -63,14 +68,15 @@ proxyServer.on('connection', function(socket) {
   });
   socket.on('close', function () {
     color.magenta('Socket closed.');
+    color.white('[close]', port);
   });
   socket.on('end', function () {
-    color.magenta('Socket ended.');
+    color.magenta('Recieved FIN packet.');
     proxySockets[port] = null;
-    color.white('[end]', port);
   });
   socket.on('error', function (e) {
     color.magenta('Error:', e.message);
+    proxySockets[port] = null;
   });
 });
 proxyServer.on('listening', function () {
