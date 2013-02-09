@@ -86,18 +86,39 @@ describe('WebSocket', function () {
       ws.send(message);
 
       var actual = mockSocket.write.getCall(0).args[0];
-      actual.length.should.equal(130 + 2 + 2);
+      actual.length.should.equal(26 * 5 + 2 + 2);
       actual[0].should.equal(0x81);
-      actual[1].should.equal(126);
+      actual[1].should.equal(0x7e);
       actual.readUInt16BE(2).should.equal(130);
       actual.toString('utf-8', 2 + 2).should.equal(message);
     });
 
-    it('throws error for ASCII string payload longer than 2^16', function () {
+    it('sends ASCII string payload longer than 2^16-1', function () {
       var message = repeatString('abcdefghijklmnopqrstuvwxyz', 2521);
-      ws.send.bind(ws, message).should.throw();
+      ws.send(message);
+
+      var actual = mockSocket.write.getCall(0).args[0];
+      actual.length.should.equal(26 * 2521 + 2 + 8);
+      actual[0].should.equal(0x81);
+      actual[1].should.equal(0x7f);
+      actual.readUInt32BE(2).should.equal(0);
+      actual.readUInt32BE(2 + 4).should.equal(26 * 2521);
+      actual.toString('utf-8', 2 + 8).should.equal(message);
     });
 
+    // Out of memory...
+    // The maximum size of Node.js buffer is 1GB - 1B.
+    // http://stackoverflow.com/questions/8974375/whats-the-maximum-size-of-a-node-js-buffer
+    // 32-bit paylod length is enough for the maximum size.
+    //
+    // Also, JavaScript handles precisely integers from -2^53 to 2^53.
+    // Numbers out of this range will not be calculated precisely.
+    // 
+    // it('throws error for ASCII string payload longer than 2^64-1', function () {
+    //   var message = repeatString('abcdefghijklmnopqrstuvwxyz', 709490156681136601);
+    //   ws.send.bind(ws, message).should.throws();
+    // });
+ 
     it('sends buffer payload', function () {
       ws.send(new Buffer('Hello, World!'));
 
@@ -109,7 +130,7 @@ describe('WebSocket', function () {
   });
 
   describe('data event', function () {
-    it('receives data', function () {
+    it('receives ASCII string payload shorter than 126', function () {
       var ws = new WebSocket(mockSocket);
       var callback = sinon.spy();
       ws.on('data', callback);
@@ -124,6 +145,44 @@ describe('WebSocket', function () {
 
       callback.should.have.been.calledOnce;
       callback.getCall(0).args[0].should.deep.equal(new Buffer('hello'));
+    });
+
+    it('receives ASCII string payload longer than 125 and shorter than 2^16', function () {
+      var ws = new WebSocket(mockSocket);
+      var callback = sinon.spy();
+      ws.on('data', callback);
+
+      var message = repeatString('abcdefghijklmnopqrstuvwxyz', 5);
+      var data = new Buffer(2 + 2 + 4 + 26 * 5);
+      data[0] = 0x81; // FIN and OPCODE
+      data[1] = 0x80 + 0x7e; // Mask flag and payload length
+      data.writeUInt16BE(26 * 5, 2) // Payload length
+      data.writeUInt32BE(0x00000000, 2 + 2); // Masking key
+      data.write(message, 2 + 2 + 4);
+      mockSocket.emit('data', data);
+
+      callback.should.have.been.calledOnce;
+      callback.getCall(0).args[0].should.deep.equal(new Buffer(message));
+    });
+
+    it('receives ASCII string payload longer than 2^16-1', function () {
+      var ws = new WebSocket(mockSocket);
+      var callback = sinon.spy();
+      ws.on('data', callback);
+
+      var message = repeatString('abcdefghijklmnopqrstuvwxyz', 2521);
+
+      var data = new Buffer(2 + 8 + 4 + 26 * 2521);
+      data[0] = 0x81; // FIN and OPCODE
+      data[1] = 0x80 + 0x7f; // Mask flag and payload length
+      data.writeUInt32BE(0, 2); // First 32 bit of payload length
+      data.writeUInt32BE(26 * 2521, 2 + 4); // Second 32 bit of payload length
+      data.writeUInt32BE(0x00000000, 2 + 8); // Masking key
+      data.write(message, 2 + 8 + 4);
+      mockSocket.emit('data', data);
+
+      callback.should.have.been.calledOnce;
+      callback.getCall(0).args[0].should.deep.equal(new Buffer(message));
     });
   });
 });
