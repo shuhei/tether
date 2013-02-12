@@ -70,6 +70,14 @@ httpServer.on('upgrade', function (req, socket, head) {
     }
   });
 
+  ws.on('closePort', function (port) {
+    var dstSocket = destinationSockets[port];
+    if (dstSocket) {
+      color.green('Ending socket:', port);
+      dstSocket.end();
+    }
+  });
+
   httpServer.ws = ws;
 });
 httpServer.on('listening', function () {
