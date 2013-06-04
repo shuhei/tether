@@ -9,15 +9,24 @@ var config = {
   DATA_LIMIT: 10000000
 };
 
+var HTTP_VERBS = 'GET PUT POST DELETE OPTIONS CONNECT UPGRADE PATCH'.split(' ');
+var LONGEST_VERB_LENGTH = 7;
+
 var httpServer = http.createServer();
 var destinationSockets = {};
+var destinationHosts = {};
+
 httpServer.on('upgrade', function (req, socket, head) {
-  var ws = VirtualSocket.upgrade(req, socket, 'proxy');
+  var ws = httpServer.ws = VirtualSocket.upgrade(req, socket, 'proxy');
 
   ws.on('dataWithPort', function (srcPort, message) {
-    var dstSocket = destinationSockets[srcPort];
+    var head = message.slice(0, LONGEST_VERB_LENGTH).toString();
+    var hasVerb = false;
+    HTTP_VERBS.forEach(function (verb) {
+      if (head.indexOf(verb) === 0) hasVerb = true;
+    });
 
-    if (!dstSocket) {
+    if (hasVerb) {
       var lines = message.toString('utf-8').split('\r\n');
       var isSecure = lines[0].indexOf('CONNECT ') === 0;
       var host, port;
@@ -28,59 +37,91 @@ httpServer.on('upgrade', function (req, socket, head) {
           port = parseInt(components[1] || (isSecure ? 443: 80));
         }
       });
+      var hostWithPort = host + ':' + port;
+      destinationHosts[srcPort] = hostWithPort;
 
-      color.green('Request is for', host, ':', port);
-      dstSocket = destinationSockets[srcPort] = net.connect(port, host);
-      dstSocket.on('connect', function () {
-        color.white('[connect]', srcPort, '->', host, port);
-        color.green('Connected to', host, ':', port);
-        if (isSecure) {
-          var connectResponse = new Buffer('HTTP/1.0 200 OK\r\nConnection established\r\n\r\n');
-          ws.sendWithPort(srcPort, connectResponse);
-        } else {
-          dstSocket.write(message, 'binary');
-        }
-      });
-      dstSocket.on('data', function (chunk) {
-        var currentIndex = 0;
-        while (chunk.length - currentIndex > 0) {
-          var lengthToSend = Math.min(chunk.length - currentIndex, config.DATA_LIMIT);
-          var bufferToSend = chunk.slice(currentIndex, currentIndex + lengthToSend);
-          currentIndex += lengthToSend;
-          ws.sendWithPort(srcPort, bufferToSend);
-        }
-      });
-      dstSocket.on('error', function (e) {
-        color.red('Error on', host, ':', port, '|', e.message);
-        destinationSockets[srcPort] = null;
-        ws.closePort(srcPort);
-      });
-      dstSocket.on('end', function () {
-        color.green('Received FIN packet:', host, ':', port);
-        destinationSockets[srcPort] = null;
-        // Send FIN packet to client ASAP.
-        ws.closePort(srcPort);
-      });
-      dstSocket.on('close', function (hadError) {
-        color.green('Closed', host, ':', port);
-        color.white('[close]', srcPort, '->', host, port);
-      });
+      var dstSocket = destinationSockets[srcPort + ':' + hostWithPort];
+      if (dstSocket) {
+        color.green('Reusing socket', srcPort, '->', hostWithPort);
+        dstSocket.write(message, 'binary');
+      } else {
+        createSocket(srcPort, message, isSecure, host, port);
+      }
     } else {
-      dstSocket.write(message, 'binary');
+      var hostWithPort = destinationHosts[srcPort];
+      if (!hostWithPort) {
+        return color.red('No host for', srcPort);
+      }
+      var dstSocket = destinationSockets[srcPort + ':' + hostWithPort];
+      if (dstSocket) {
+        color.green('Sending', srcPort, '->', hostWithPort);
+        dstSocket.write(message, 'binary');
+      } else {
+        color.red('Neither HTTP verb nor socket for srcPort', srcPort);
+        console.log(destinationHosts);
+        console.log(destinationSockets);
+      }
     }
   });
 
-  ws.on('closePort', function (port) {
-    var dstSocket = destinationSockets[port];
-    if (dstSocket) {
-      color.green('Ending socket:', port);
-      dstSocket.end();
-    }
-  });
-
-  httpServer.ws = ws;
+  // ws.on('closePort', function (srcPort) {
+  //   var hostWithPort = destinationHosts[srcPort];
+  //   var dstSocket = destinationSockets[hostWithPort];
+  //   delete destinationHosts[srcPort];
+  //   delete destinationSockets[hostWithPort];
+  //   if (dstSocket) {
+  //     color.green('Ending socket:', srcPort);
+  //     dstSocket.end();
+  //   }
+  // });
 });
 httpServer.on('listening', function () {
   color.green('WS -> HTTP server listening on', config.SERVER_PORT);
 });
 httpServer.listen(config.SERVER_PORT);
+
+function createSocket(srcPort, message, isSecure, host, port) {
+  var ws = httpServer.ws;
+  var hostWithPort = host + ':' + port;
+  color.green('Creating socket from', srcPort, '->', hostWithPort);
+
+  dstSocket = destinationSockets[srcPort + ':' + hostWithPort] = net.connect(port, host);
+  dstSocket.on('connect', function () {
+    color.white('[connect]', srcPort, '->', host, port);
+    color.green('Connected to', host, ':', port);
+    if (isSecure) {
+      var connectResponse = new Buffer('HTTP/1.0 200 OK\r\nConnection established\r\n\r\n');
+      ws.sendWithPort(srcPort, connectResponse);
+    } else {
+      dstSocket.write(message, 'binary');
+    }
+  });
+  dstSocket.on('data', function (chunk) {
+    color.yellow('Received data', srcPort, '<-', hostWithPort);
+    var currentIndex = 0;
+    while (chunk.length - currentIndex > 0) {
+      var lengthToSend = Math.min(chunk.length - currentIndex, config.DATA_LIMIT);
+      var bufferToSend = chunk.slice(currentIndex, currentIndex + lengthToSend);
+      currentIndex += lengthToSend;
+      ws.sendWithPort(srcPort, bufferToSend);
+    }
+  });
+  dstSocket.on('error', function (e) {
+    color.red('Error on', srcPort, '->', host, ':', port, '|', e.message);
+    console.log(destinationHosts);
+    console.log(destinationSockets);
+    // ws.closePort(srcPort);
+  });
+  dstSocket.on('end', function () {
+    color.green('Received FIN packet:', host, ':', port);
+    // Send FIN packet to client ASAP.
+    // ws.closePort(srcPort);
+  });
+  dstSocket.on('close', function (hadError) {
+    color.green('Closed', host, ':', port);
+    color.white('[close]', srcPort, '->', host, port);
+    delete destinationHosts[srcPort];
+    delete destinationSockets[srcPort + ':' + hostWithPort];
+    ws.closePort(srcPort);
+  });
+}
