@@ -1,6 +1,7 @@
 var http = require('http');
-var net = require('net');
 var fs = require('fs');
+var uuid = require('node-uuid');
+var url = require('url');
 
 var VirtualSocket = require('./lib/virtualsocket');
 var color = require('./lib/color');
@@ -29,64 +30,80 @@ httpServer.on('request', function (req, res) {
     res.end(replaced);
   });
 });
+
 httpServer.on('upgrade', function (req, socket, head) {
   var ws = VirtualSocket.upgrade(req, socket, 'proxy');
-
-  ws.on('dataWithPort', function (port, data) {
-    var proxySocket = proxySockets[port];
-    color.green('Sending response data:', data.length);
-    proxySocket && proxySocket.write(data, 'binary');
-  });
-  ws.on('closePort', function (port) {
-    var proxySocket = proxySockets[port];
-    if (proxySocket) {
-      color.green('Ending socket:', port);
-      proxySocket.end();
-    }
-  });
-
   httpServer.ws = ws;
   color.green('Upgraded');
+
+  ws.on('headerWithId', function (id, header) {
+    color.green(id, 'received response header');
+    var response = proxyResponses[id];
+    response.writeHead(header.statusCode, header.headers);
+  });
+
+  ws.on('dataWithId', function (id, data) {
+    color.green(id, 'received response data:', data.length);
+    var response = proxyResponses[id];
+    response.write(data, 'binary');
+  });
+
+  ws.on('closeId', function (id) {
+    color.green(id, 'received response end');
+    var response = proxyResponses[id];
+    response.end();
+  });
 });
+
 httpServer.on('listening', function () {
   color.green('HTTP & WebSocket server listening on', config.CLIENT_PORT);
 });
+
 httpServer.listen(config.CLIENT_PORT);
 
 // HTTP Proxy server on local
-var proxyServer = net.createServer();
-var proxySockets = {};
-proxyServer.on('connection', function(socket) {
-  color.magenta('Socket opened with', socket.remoteAddress, socket.remotePort);
-  color.white('[connect]', socket.remotePort);
-  var port = socket.remotePort;
-  proxySockets[port] = socket;
+var proxyServer = http.createServer();
+var proxyResponses = {};
+proxyServer.on('request', function(request, response) {
+  var id = uuid.v4().replace(/-/g, '');
+  proxyResponses[id] = response;
 
-  socket.on('data', function (data) {
-    color.magenta('Received request data:', data.length);
-    if (httpServer.ws) {
-      httpServer.ws.sendWithPort(port, data);
-    }
-  });
-  socket.on('close', function () {
-    color.magenta('Socket closed.');
-    color.white('[close]', port);
-  });
-  socket.on('end', function () {
-    color.magenta('Recieved FIN packet.');
-    proxySockets[port] = null;
+  var parsed = url.parse(request.url);
+  var options = {
+    hostname: request.headers.host,
+    port: request.method === 'CONNECT' ? 443 : 80,
+    path: parsed.path + (parsed.hash || ''),
+    method: request.method,
+    headers: request.headers
+  };
+  console.log(options);
+  httpServer.ws.sendHeader(id, options);
 
-    httpServer.ws.closePort(port);
-  });
-  socket.on('error', function (e) {
-    color.magenta('Error:', e.message);
-    proxySockets[port] = null;
+  color.magenta(id, 'received request header');
+  color.magenta(id, 'sent request header');
 
-    httpServer.ws.closePort(port);
+  request.on('data', function (data) {
+    color.magenta(id, 'received request data:', data.length);
+    httpServer.ws.sendData(id, data);
+  });
+
+  request.on('end', function () {
+    color.magenta(id, 'received request end');
+    httpServer.ws.closeId(id);
   });
 });
+
 proxyServer.on('listening', function () {
   color.magenta('HTTP proxy server listening on', config.PROXY_PORT);
 });
+/*
+proxyServer.on('connect', function () {
+  // TODO Implement
+});
+
+proxyServer.on('upgrade', function () {
+  // TODO Do something 
+});
+*/
 proxyServer.listen(config.PROXY_PORT);
 
