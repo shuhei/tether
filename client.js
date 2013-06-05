@@ -76,7 +76,6 @@ proxyServer.on('request', function(request, response) {
     method: request.method,
     headers: request.headers
   };
-  console.log(options);
   httpServer.ws.sendHeader(id, options);
 
   color.magenta(id, 'received request header');
