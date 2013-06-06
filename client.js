@@ -73,8 +73,7 @@ proxyServer.on('request', function(request, response) {
   var parsed = url.parse(request.url);
   var options = {
     hostname: request.headers.host,
-    // TODO Use appropriate port.
-    port: request.method === 'CONNECT' ? 443 : 80,
+    port: parsed.port || 80,
     path: parsed.path + (parsed.hash || ''),
     method: request.method,
     headers: request.headers
@@ -106,8 +105,7 @@ proxyServer.on('connect', function (request, socket) {
 
   var parsed = url.parse(request.url);
   var options = {
-    // TODO Check port.
-    port: 443,
+    port: parsed.port || 443,
     host: request.headers.host,
     method: request.method
   };
