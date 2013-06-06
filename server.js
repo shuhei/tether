@@ -19,47 +19,78 @@ httpServer.on('upgrade', function (req, socket, head) {
     color.green(id, 'received request header');
     color.white(header);
 
-    var request = http.request(header);
-    destinationRequests[id] = request;
-    color.green(id, 'sent request header to', header.hostname);
+    // TODO Check whether method is lower or upper.
+    if (header.method.toLowerCase() === 'connect') {
+      var socket = net.connect(header);
+      // TODO It work but confusing....
+      destinationRequests[id] = socket;
 
-    request.on('error', function (err) {
-      // TODO Retry or do something with Agent.
-      // http://qiita.com/items/f4fe9b1573e30d087f16
-      color.red(id, 'received request error from', header.hostname);
-      color.red(err);
-    });
-
-    request.on('response', function (response) {
-      ws.sendHeader(id, {
-        statusCode: response.statusCode,
-        headers: response.headers
-      });
-      color.green(id, 'received response header');
-      color.green(id, 'sent response header');
-
-      response.on('data', function (chunk) {
-        color.green(id, 'received response data:', chunk.length);
-        var currentIndex = 0;
-        while (chunk.length - currentIndex > 0) {
-          var lengthToSend = Math.min(chunk.length - currentIndex, config.DATA_LIMIT);
-          var bufferToSend = chunk.slice(currentIndex, currentIndex + lengthToSend);
-          currentIndex += lengthToSend;
-          ws.sendData(id, bufferToSend);
-        }
+      socket.on('connect', function () {
+        color.yellow(id, 'socket connected');
+        var res = 'HTTP/1.1 200 Connection established\r\n\r\n';
+        ws.sendData(id, new Buffer(res));
       });
 
-      response.on('end', function () {
-        color.green(id, 'received response end');
+      socket.on('data', function (data) {
+        color.yellow(id, 'received socket data:', data.length);
+        ws.sendData(id, data);
+      });
+
+      socket.on('end', function () {
+        color.yellow(id, 'received socket end');
         ws.closeId(id);
       });
 
-      response.on('error', function () {
-        color.red(id, 'received response error');
-        // TODO with error?
+      socket.on('error', function (err) {
+        color.red(id, 'received socket error', err);
+        var res = 'HTTP/1.1 500 Connection error\r\n\r\n';
+        ws.sendData(id, new Buffer(res));
         ws.closeId(id);
       });
-    });
+    } else {
+      // Make a request to destination server.      
+      var request = http.request(header);
+      destinationRequests[id] = request;
+      color.green(id, 'sent request header to', header.hostname);
+
+      request.on('error', function (err) {
+        // TODO Retry or do something with Agent.
+        // http://qiita.com/items/f4fe9b1573e30d087f16
+        color.red(id, 'received request error from', header.hostname);
+        color.red(err);
+      });
+
+      request.on('response', function (response) {
+        ws.sendHeader(id, {
+          statusCode: response.statusCode,
+          headers: response.headers
+        });
+        color.green(id, 'received response header');
+        color.green(id, 'sent response header');
+
+        response.on('data', function (chunk) {
+          color.green(id, 'received response data:', chunk.length);
+          var currentIndex = 0;
+          while (chunk.length - currentIndex > 0) {
+            var lengthToSend = Math.min(chunk.length - currentIndex, config.DATA_LIMIT);
+            var bufferToSend = chunk.slice(currentIndex, currentIndex + lengthToSend);
+            currentIndex += lengthToSend;
+            ws.sendData(id, bufferToSend);
+          }
+        });
+
+        response.on('end', function () {
+          color.green(id, 'received response end');
+          ws.closeId(id);
+        });
+
+        response.on('error', function (err) {
+          color.red(id, 'received response error', err);
+          // TODO with error?
+          ws.closeId(id);
+        });
+      });
+    }
   });
 
   ws.on('dataWithId', function (id, message) {

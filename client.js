@@ -61,16 +61,19 @@ httpServer.on('listening', function () {
 
 httpServer.listen(config.CLIENT_PORT);
 
+
 // HTTP Proxy server on local
 var proxyServer = http.createServer();
 var proxyResponses = {};
+
 proxyServer.on('request', function(request, response) {
-  var id = uuid.v4().replace(/-/g, '');
+  var id = generateUUID();
   proxyResponses[id] = response;
 
   var parsed = url.parse(request.url);
   var options = {
     hostname: request.headers.host,
+    // TODO Use appropriate port.
     port: request.method === 'CONNECT' ? 443 : 80,
     path: parsed.path + (parsed.hash || ''),
     method: request.method,
@@ -95,14 +98,45 @@ proxyServer.on('request', function(request, response) {
 proxyServer.on('listening', function () {
   color.magenta('HTTP proxy server listening on', config.PROXY_PORT);
 });
-/*
-proxyServer.on('connect', function () {
-  // TODO Implement
+
+proxyServer.on('connect', function (request, socket) {
+  var id = generateUUID();
+  // TODO Does this work? Even if so, it's confusing...
+  proxyResponses[id] = socket;
+
+  var parsed = url.parse(request.url);
+  var options = {
+    // TODO Check port.
+    port: 443,
+    host: request.headers.host,
+    method: request.method
+  };
+  httpServer.ws.sendHeader(id, options);
+
+  socket.on('data', function (data) {
+    color.blue(id, 'received socket data:', data.length);
+    httpServer.ws.sendData(id, data);
+  });
+
+  socket.on('end', function () {
+    color.blue(id, 'received socket end');
+    httpServer.ws.closeId(id);
+  });
+
+  socket.on('error', function () {
+    color.red(id, 'received socket error');
+    httpServer.ws.closeId(id);
+  });
 });
 
+/*
 proxyServer.on('upgrade', function () {
   // TODO Do something 
 });
 */
+
 proxyServer.listen(config.PROXY_PORT);
 
+function generateUUID() {
+  return uuid.v4().replace(/-/g, '');
+}
